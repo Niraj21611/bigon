@@ -1,0 +1,15 @@
+{
+	"manifest_version": 3,
+	"name": "LeetCode AI Analyzer",
+	"version": "0.1.0",
+	"description": "Analyze accepted LeetCode submissions for time and space complexity using OpenAI.",
+	"permissions": ["storage", "scripting"],
+	"host_permissions": ["https://leetcode.com/problems/*"],
+	"content_scripts": [
+		{
+			"matches": ["https://leetcode.com/problems/*"],
+			"js": ["content.js"],
+			"run_at": "document_idle"
+		}
+	]
+}
