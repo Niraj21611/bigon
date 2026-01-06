@@ -30,7 +30,7 @@ declare const chrome: {
 const CARD_ID = "leetcode-ai-analyzer-card";
 const BUTTON_ID = "leetcode-ai-analyzer-button";
 const STORAGE_PREFIX = "leetcode-ai-analyzer";
-const ACCEPTED_TEXT = "Accepted";
+const ACCEPTED_KEYWORD = "accepted";
 
 // Prefer build-time injected endpoint; fallback to local dev
 const API_ENDPOINT =
@@ -276,12 +276,26 @@ const ensureButton = (anchor: HTMLElement) => {
 	}
 };
 
+const textIsAccepted = (text?: string | null) => text?.toLowerCase().includes(ACCEPTED_KEYWORD) ?? false;
+
 const findAcceptedNode = (root: ParentNode): HTMLElement | null => {
-	const candidates = Array.from(root.querySelectorAll("span, div, p, strong"));
-		const strongMatch = candidates.find((el) => el.textContent?.trim().startsWith(ACCEPTED_TEXT));
-		if (strongMatch) return strongMatch as HTMLElement;
-		const weakMatch = candidates.find((el) => el.textContent?.includes(ACCEPTED_TEXT));
-		return (weakMatch as HTMLElement) ?? null;
+		const prioritySelectors = [
+			"[data-e2e-locator='submission-result']",
+			"[data-cy='judge-status']",
+			"[data-cy='submission-result']",
+			"[class*='accept']",
+			"[role='alert']",
+		];
+
+	for (const selector of prioritySelectors) {
+		const nodes = Array.from(root.querySelectorAll(selector));
+		const match = nodes.find((el) => textIsAccepted(el.textContent));
+		if (match) return match as HTMLElement;
+	}
+
+	const candidates = Array.from(root.querySelectorAll("span, div, p, strong, h1, h2, h3, button"));
+	const found = candidates.find((el) => textIsAccepted(el.textContent));
+	return (found as HTMLElement) ?? null;
 };
 
 const observeAccepted = () => {
@@ -292,20 +306,29 @@ const observeAccepted = () => {
 	const initial = findAcceptedNode(target);
 	if (initial) ensureButton(initial);
 
-	const observer = new MutationObserver((mutations) => {
-		for (const mutation of mutations) {
-			for (const node of Array.from(mutation.addedNodes)) {
-				if (!(node instanceof HTMLElement)) continue;
-				const acceptedNode = node && findAcceptedNode(node);
-				if (acceptedNode) {
-					ensureButton(acceptedNode);
-					return;
-				}
-			}
+	let buttonSeen = !!initial;
+	const injectIfFound = () => {
+		const node = findAcceptedNode(document.body);
+		if (node) {
+			ensureButton(node);
+			buttonSeen = true;
 		}
+	};
+
+	const observer = new MutationObserver(() => {
+		injectIfFound();
 	});
 
-	observer.observe(target, { childList: true, subtree: true });
+	observer.observe(target, { childList: true, subtree: true, characterData: true });
+
+	// Fallback polling in case mutations are missed
+	const pollId = window.setInterval(() => {
+		if (buttonSeen) {
+			window.clearInterval(pollId);
+			return;
+		}
+		injectIfFound();
+	}, 1500);
 };
 
 const init = async () => {
